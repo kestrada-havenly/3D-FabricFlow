@@ -5,7 +5,6 @@ import { ControlPanel } from './components/ControlPanel';
 import { SceneModel } from './components/SceneModel';
 import { GeminiAdvisor } from './components/GeminiAdvisor';
 import { TexturePreview } from './components/TexturePreview';
-import { UVViewer } from './components/UVViewer';
 import { TextureTransform, Unit, TextureAdjustments, UVMeshData } from './types';
 import { Loader2, Box as BoxIcon } from 'lucide-react';
 
@@ -98,13 +97,9 @@ export default function App() {
   const [showUVGrid, setShowUVGrid] = useState(false);
   const [unit, setUnit] = useState<Unit>('in');
   const [ambientIntensity, setAmbientIntensity] = useState(3.0);
-  const [useTriplanar, setUseTriplanar] = useState(true);
-  const [useSubmeshScale, setUseSubmeshScale] = useState(false);
+  const [useTriplanar, setUseTriplanar] = useState(false);
+  const [useSubmeshScale, setUseSubmeshScale] = useState(true);
   const [uvStandardSize, setUvStandardSize] = useState(23); // Default 23 inches
-  
-  // UV Viewer State
-  const [showUVViewer, setShowUVViewer] = useState(false);
-  const [uvData, setUvData] = useState<UVMeshData[]>([]);
   
   // State to manage OrbitControls availability
   const [orbitEnabled, setOrbitEnabled] = useState(true);
@@ -386,7 +381,7 @@ export default function App() {
           </Suspense>
           <OrbitControls 
             makeDefault 
-            enabled={orbitEnabled && !showUVViewer}
+            enabled={orbitEnabled}
             minPolarAngle={0} 
             maxPolarAngle={Math.PI / 2} 
             enableDamping={false}
@@ -417,12 +412,8 @@ export default function App() {
         onClearScene={handleClearScene}
         showDimensions={showDimensions}
         onToggleDimensions={() => setShowDimensions(!showDimensions)}
-        showWireframe={showWireframe}
-        onToggleWireframe={() => setShowWireframe(!showWireframe)}
         showUVGrid={showUVGrid}
         onToggleUVGrid={() => setShowUVGrid(!showUVGrid)}
-        showUVViewer={showUVViewer}
-        onToggleUVViewer={() => setShowUVViewer(!showUVViewer)}
         modelName={modelName}
         textureName={textureName}
         unit={unit}
@@ -458,13 +449,6 @@ export default function App() {
         textureName={textureName}
         onMouseEnter={() => setOrbitEnabled(false)}
         onMouseLeave={() => setOrbitEnabled(true)}
-      />
-
-      <UVViewer 
-        isOpen={showUVViewer} 
-        onClose={() => setShowUVViewer(false)}
-        textureUrl={textureUrl}
-        uvData={uvData}
       />
 
     </div>

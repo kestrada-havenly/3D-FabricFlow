@@ -11,12 +11,8 @@ interface ControlPanelProps {
   onClearScene: () => void;
   showDimensions: boolean;
   onToggleDimensions: () => void;
-  showWireframe: boolean;
-  onToggleWireframe: () => void;
   showUVGrid: boolean;
   onToggleUVGrid: () => void;
-  showUVViewer?: boolean;
-  onToggleUVViewer?: () => void;
   modelName?: string;
   textureName?: string;
   unit: Unit;
@@ -190,12 +186,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onClearScene,
   showDimensions,
   onToggleDimensions,
-  showWireframe,
-  onToggleWireframe,
   showUVGrid,
   onToggleUVGrid,
-  showUVViewer,
-  onToggleUVViewer,
   modelName,
   textureName,
   unit,
@@ -352,189 +344,22 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           </label>
         </div>
 
-        {/* Physical Size (Anchor) Input - Global Scaling */}
-        <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+        {/* Physical Size Input */}
+        <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-indigo-700 uppercase">Reference Size (Anchor)</span>
-              <span className="text-[10px] text-indigo-500">1 UV Unit = ?</span>
+              <span className="text-xs font-bold text-gray-500 uppercase">Physical Size</span>
+              <span className="text-[10px] text-gray-400">Scale Reference</span>
            </div>
            <SmartNumberInput
-              label="Physical Size"
+              label="Size"
               value={toDisplay(uvStandardSize)}
-              onChange={(val) => {
-                onUvStandardSizeChange(toInternal(val));
-                if (!useSubmeshScale) setUseSubmeshScale(true);
-              }}
+              onChange={(val) => onUvStandardSizeChange(toInternal(val))}
               unit={unit}
               step={1}
            />
-           {selectedMeshHeight !== undefined && selectedMeshHeight !== null && (
-             <button
-               onClick={() => {
-                 onUvStandardSizeChange(selectedMeshHeight);
-                 if (!useSubmeshScale) setUseSubmeshScale(true);
-               }}
-               className="w-full mt-2 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded shadow-sm transition-colors flex items-center justify-center gap-2"
-               title="Set the Standard UV Scale to match the height of the currently selected submesh"
-             >
-               <Ruler size={12} />
-               Set Anchor from Selection ({toDisplay(selectedMeshHeight).toFixed(1)} {unit})
-             </button>
-           )}
-           {!useSubmeshScale && (
-             <div className="mt-2 text-[10px] text-indigo-600 italic">
-               * Changing this will enable Auto-Scaling mode.
-             </div>
-           )}
-        </div>
-      </div>
-
-      <hr className="border-gray-200" />
-
-      {/* Controls */}
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-           <div className="flex flex-col">
-             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Fabric Adjustments</h3>
-             {selectedMeshName ? (
-                <div className="flex items-center gap-2 mt-1">
-                   <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 truncate max-w-[120px]" title={selectedMeshName}>
-                     {selectedMeshName}
-                   </span>
-                   {onDeselectMesh && (
-                     <button onClick={onDeselectMesh} className="text-[10px] text-gray-400 hover:text-gray-600 underline">
-                       Reset
-                     </button>
-                   )}
-                </div>
-             ) : (
-                <span className="text-[10px] text-gray-400 italic mt-0.5">Global (All Parts)</span>
-             )}
-           </div>
-           
-           <div className="flex gap-1">
-             <button 
-               onClick={onToggleTriplanar}
-               className={`flex items-center justify-center p-1.5 rounded-md transition-colors ${useTriplanar ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-               title="Toggle Triplanar Mapping (Physical Size)"
-             >
-               <span className="text-[10px] font-bold">TP</span>
-             </button>
-             <button 
-               onClick={() => setUseSubmeshScale(!useSubmeshScale)}
-               className={`flex items-center justify-center p-1.5 rounded-md transition-colors ${useSubmeshScale ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-               title="Toggle Submesh Auto-Scaling (Physical Size)"
-             >
-               <span className="text-[10px] font-bold">SM</span>
-             </button>
-             <button 
-               onClick={onToggleWireframe}
-               className={`flex items-center justify-center p-1.5 rounded-md transition-colors ${showWireframe ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-               title="Toggle Wireframe Overlay"
-             >
-               <BoxSelect size={14} />
-             </button>
-             <button 
-               onClick={onToggleUVGrid}
-               className={`flex items-center justify-center p-1.5 rounded-md transition-colors ${showUVGrid ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-               title="Toggle UV Test Grid (3D)"
-             >
-               <Grid3x3 size={14} />
-             </button>
-             <button 
-               onClick={onToggleUVViewer}
-               className={`flex items-center justify-center p-1.5 rounded-md transition-colors ${showUVViewer ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-               title="Open UV Map Inspector (2D)"
-             >
-               <Map size={14} />
-             </button>
-             <button 
-               onClick={onToggleDimensions}
-               className={`flex items-center justify-center p-1.5 rounded-md transition-colors ${showDimensions ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-               title="Toggle Measurements"
-             >
-               <Ruler size={14} />
-             </button>
-           </div>
         </div>
 
-        {/* Texture Physical Size & Info */}
-        <div className={`space-y-3 p-3 rounded-lg border transition-colors ${selectedMeshName ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-100'}`}>
-          <div className="flex items-center justify-between text-sm text-gray-700">
-            <div className="flex items-center gap-2">
-              <ScanLine size={16} />
-              <span className="font-medium">Physical Size</span>
-            </div>
-            {selectedMeshName && <MousePointer2 size={12} className="text-indigo-400" />}
-          </div>
-
-          {/* Pixel Dimensions Display (Informational Only) */}
-          {textureMeta ? (
-             <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-white p-2 rounded border border-gray-200 flex flex-col">
-                  <span className="text-gray-400 text-[10px] uppercase font-bold mb-1 flex items-center gap-1">
-                    <ChevronsLeftRight size={10} /> PX Width
-                  </span>
-                  <span className="font-mono font-medium text-gray-700">{textureMeta.width}px</span>
-                </div>
-                <div className="bg-white p-2 rounded border border-gray-200 flex flex-col">
-                  <span className="text-gray-400 text-[10px] uppercase font-bold mb-1 flex items-center gap-1">
-                    <ChevronsUpDown size={10} /> PX Height
-                  </span>
-                  <span className="font-mono font-medium text-gray-700">{textureMeta.height}px</span>
-                </div>
-             </div>
-          ) : (
-            <div className="text-center py-2 text-xs text-gray-400 italic bg-white/50 rounded border border-dashed border-gray-200">
-              No texture loaded
-            </div>
-          )}
-          
-          {/* Smart Inputs for Width / Height */}
-          <div className="flex items-end gap-2 mt-2">
-            <SmartNumberInput
-              label="Width"
-              unit={unit}
-              value={toDisplay(transform.textureWidth)}
-              onChange={(val) => updateDimension('width', val)}
-            />
-
-            <button
-              onClick={() => setLockRatio(!lockRatio)}
-              className={`mb-2 p-1.5 rounded-md transition-colors ${lockRatio ? 'text-indigo-600 bg-indigo-50 border border-indigo-200' : 'text-gray-400 hover:bg-gray-100 border border-transparent'}`}
-              title={lockRatio ? "Unlock Aspect Ratio" : "Lock Aspect Ratio"}
-            >
-              {lockRatio ? <Lock size={16} /> : <Unlock size={16} />}
-            </button>
-
-            <SmartNumberInput
-              label="Height"
-              unit={unit}
-              value={toDisplay(transform.textureHeight)}
-              onChange={(val) => updateDimension('height', val)}
-            />
-          </div>
-        </div>
-
-        {/* Scale Modifier */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm text-gray-600">
-            <div className="flex items-center gap-2">
-              <Maximize size={16} />
-              <span>Scale Modifier</span>
-            </div>
-            <span className="font-mono">{transform.scale.toFixed(1)}x</span>
-          </div>
-          <input
-            type="range"
-            min="0.1"
-            max="10"
-            step="0.1"
-            value={transform.scale}
-            onChange={(e) => update('scale', parseFloat(e.target.value))}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-          />
-        </div>
+        {/* Scale Modifier Removed */}
 
         {/* Rotation */}
         <div className="space-y-2">
