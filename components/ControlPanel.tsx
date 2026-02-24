@@ -5,7 +5,7 @@ import { TextureTransform, Unit } from '../types';
 interface ControlPanelProps {
   transform: TextureTransform;
   onTransformChange: (newTransform: TextureTransform) => void;
-  onFbxUpload: (file: File) => void;
+  onModelUpload: (file: File) => void;
   onTextureUpload: (file: File) => void;
   onResetCamera: () => void;
   onClearScene: () => void;
@@ -17,7 +17,7 @@ interface ControlPanelProps {
   onToggleUVGrid: () => void;
   showUVViewer?: boolean;
   onToggleUVViewer?: () => void;
-  fbxName?: string;
+  modelName?: string;
   textureName?: string;
   unit: Unit;
   setUnit: (unit: Unit) => void;
@@ -28,6 +28,13 @@ interface ControlPanelProps {
   onAmbientIntensityChange: (value: number) => void;
   selectedMeshName?: string | null;
   onDeselectMesh?: () => void;
+  useTriplanar: boolean;
+  onToggleTriplanar: () => void;
+  useSubmeshScale: boolean;
+  setUseSubmeshScale: (val: boolean) => void;
+  uvStandardSize: number;
+  onUvStandardSizeChange: (val: number) => void;
+  selectedMeshHeight?: number | null;
 }
 
 // -- Sub-component for Enhanced Number Inputs --
@@ -177,7 +184,7 @@ const SmartNumberInput: React.FC<SmartNumberInputProps> = ({
 export const ControlPanel: React.FC<ControlPanelProps> = ({
   transform,
   onTransformChange,
-  onFbxUpload,
+  onModelUpload,
   onTextureUpload,
   onResetCamera,
   onClearScene,
@@ -189,7 +196,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onToggleUVGrid,
   showUVViewer,
   onToggleUVViewer,
-  fbxName,
+  modelName,
   textureName,
   unit,
   setUnit,
@@ -199,13 +206,20 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   ambientIntensity,
   onAmbientIntensityChange,
   selectedMeshName,
-  onDeselectMesh
+  onDeselectMesh,
+  useTriplanar,
+  onToggleTriplanar,
+  useSubmeshScale,
+  setUseSubmeshScale,
+  uvStandardSize,
+  onUvStandardSizeChange,
+  selectedMeshHeight
 }) => {
   const [lockRatio, setLockRatio] = useState(true);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'fbx' | 'texture') => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'model' | 'texture') => {
     if (e.target.files && e.target.files[0]) {
-      if (type === 'fbx') onFbxUpload(e.target.files[0]);
+      if (type === 'model') onModelUpload(e.target.files[0]);
       else onTextureUpload(e.target.files[0]);
     }
   };
@@ -307,15 +321,15 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             <div className="flex items-center gap-3">
               <FileBox size={20} />
               <span className="font-medium text-sm truncate max-w-[140px]">
-                {fbxName || 'Upload Model (FBX)'}
+                {modelName || 'Upload Model (FBX/OBJ)'}
               </span>
             </div>
             <Upload size={16} />
             <input
               type="file"
-              accept=".fbx"
+              accept=".fbx,.obj"
               className="hidden"
-              onChange={(e) => handleFileChange(e, 'fbx')}
+              onChange={(e) => handleFileChange(e, 'model')}
             />
           </label>
         </div>
@@ -336,6 +350,42 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               onChange={(e) => handleFileChange(e, 'texture')}
             />
           </label>
+        </div>
+
+        {/* Physical Size (Anchor) Input - Global Scaling */}
+        <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+           <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-indigo-700 uppercase">Reference Size (Anchor)</span>
+              <span className="text-[10px] text-indigo-500">1 UV Unit = ?</span>
+           </div>
+           <SmartNumberInput
+              label="Physical Size"
+              value={toDisplay(uvStandardSize)}
+              onChange={(val) => {
+                onUvStandardSizeChange(toInternal(val));
+                if (!useSubmeshScale) setUseSubmeshScale(true);
+              }}
+              unit={unit}
+              step={1}
+           />
+           {selectedMeshHeight !== undefined && selectedMeshHeight !== null && (
+             <button
+               onClick={() => {
+                 onUvStandardSizeChange(selectedMeshHeight);
+                 if (!useSubmeshScale) setUseSubmeshScale(true);
+               }}
+               className="w-full mt-2 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded shadow-sm transition-colors flex items-center justify-center gap-2"
+               title="Set the Standard UV Scale to match the height of the currently selected submesh"
+             >
+               <Ruler size={12} />
+               Set Anchor from Selection ({toDisplay(selectedMeshHeight).toFixed(1)} {unit})
+             </button>
+           )}
+           {!useSubmeshScale && (
+             <div className="mt-2 text-[10px] text-indigo-600 italic">
+               * Changing this will enable Auto-Scaling mode.
+             </div>
+           )}
         </div>
       </div>
 
@@ -363,6 +413,20 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
            </div>
            
            <div className="flex gap-1">
+             <button 
+               onClick={onToggleTriplanar}
+               className={`flex items-center justify-center p-1.5 rounded-md transition-colors ${useTriplanar ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+               title="Toggle Triplanar Mapping (Physical Size)"
+             >
+               <span className="text-[10px] font-bold">TP</span>
+             </button>
+             <button 
+               onClick={() => setUseSubmeshScale(!useSubmeshScale)}
+               className={`flex items-center justify-center p-1.5 rounded-md transition-colors ${useSubmeshScale ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+               title="Toggle Submesh Auto-Scaling (Physical Size)"
+             >
+               <span className="text-[10px] font-bold">SM</span>
+             </button>
              <button 
                onClick={onToggleWireframe}
                className={`flex items-center justify-center p-1.5 rounded-md transition-colors ${showWireframe ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}

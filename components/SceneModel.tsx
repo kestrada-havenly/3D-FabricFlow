@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLoader, useFrame, useThree } from '@react-three/fiber';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
 import { TextureLoader, RepeatWrapping, Mesh, Texture, MeshStandardMaterial, DoubleSide, Box3, Vector3, SRGBColorSpace, CanvasTexture, NearestFilter, WireframeGeometry, LineSegments, LineBasicMaterial, Group, Color } from 'three';
 import { Html, Line } from '@react-three/drei';
 import { ModelProps, Unit, UVMeshData } from '../types';
@@ -129,34 +130,45 @@ const createUVGridTexture = () => {
 };
 
 export const SceneModel: React.FC<ModelProps> = ({ 
-  fbxUrl, 
+  modelUrl, 
+  modelType,
   textureUrl, 
   transform, 
   submeshTransforms,
   selectedMeshId,
   onMeshSelect,
+  onAnchorCalculated,
   showDimensions = true, 
   showWireframe = false,
   showUVGrid = false,
   unit,
-  onUVsLoaded
+  onUVsLoaded,
+  useTriplanar,
+  useSubmeshScale,
+  uvStandardSize
 }) => {
   const { gl } = useThree();
   const groupRef = useRef<Group>(null);
   
-  // Load the FBX if URL exists
-  const fbx = useLoader(FBXLoader, fbxUrl || '');
+  // Select Loader based on type
+  const Loader = useMemo(() => {
+    return modelType === 'obj' ? OBJLoader : FBXLoader;
+  }, [modelType]);
+
+  // Load the Model if URL exists
+  // @ts-ignore - Three.js loaders are compatible enough for this usage
+  const model = useLoader(Loader, modelUrl || '');
 
   // Keep track of all meshes for iteration
   const meshRefs = useRef<Mesh[]>([]);
 
-  // 1. Initial Processing of FBX
+  // 1. Initial Processing of Model
   useEffect(() => {
-    if (fbx) {
+    if (model) {
       meshRefs.current = [];
       const data: UVMeshData[] = [];
 
-      fbx.traverse((child) => {
+      model.traverse((child: any) => {
         if ((child as Mesh).isMesh) {
           const m = child as Mesh;
           
@@ -182,27 +194,27 @@ export const SceneModel: React.FC<ModelProps> = ({
       
       if (onUVsLoaded) onUVsLoaded(data);
     }
-  }, [fbx, onUVsLoaded]);
+  }, [model, onUVsLoaded]);
 
   // Calculate bounding box for dimensions based on Meshes only
   const boundingBox = useMemo(() => {
-    if (!fbx) return null;
-    fbx.updateMatrixWorld(true);
+    if (!model) return null;
+    model.updateMatrixWorld(true);
     const box = new Box3();
     let hasMesh = false;
-    fbx.traverse((child) => {
+    model.traverse((child: any) => {
       if ((child as Mesh).isMesh) {
         box.expandByObject(child);
         hasMesh = true;
       }
     });
-    if (!hasMesh) box.setFromObject(fbx);
+    if (!hasMesh) box.setFromObject(model);
     if (box.isEmpty()) {
        box.min.set(-0.5, -0.5, -0.5);
        box.max.set(0.5, 0.5, 0.5);
     }
     return box;
-  }, [fbx]);
+  }, [model]);
 
   // Load the User Texture (Base)
   const userTextureBase = useMemo(() => {
@@ -227,6 +239,87 @@ export const SceneModel: React.FC<ModelProps> = ({
        }
        const mat = mesh.material as MeshStandardMaterial;
 
+       // Inject Triplanar Shader Logic
+       mat.onBeforeCompile = (shader) => {
+          shader.uniforms.uTextureSize = { value: new Vector3(1, 1, 1) }; // Using vec3 for flexibility, though vec2 is enough
+          shader.uniforms.uScale = { value: 1.0 };
+          shader.uniforms.uUseTriplanar = { value: 0.0 }; // 0 = false, 1 = true
+          
+          // Inject Vertex Logic
+          shader.vertexShader = 'varying vec3 vWorldPosition;\nvarying vec3 vWorldNormal;\n' + shader.vertexShader;
+          shader.vertexShader = shader.vertexShader.replace(
+            '#include <worldpos_vertex>',
+            `
+            #include <worldpos_vertex>
+            vWorldPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;
+            vWorldNormal = normalize(mat3(modelMatrix) * normal);
+            `
+          );
+
+          // Inject Fragment Logic
+          shader.fragmentShader = `
+            varying vec3 vWorldPosition;
+            varying vec3 vWorldNormal;
+            uniform vec3 uTextureSize;
+            uniform float uScale;
+            uniform float uUseTriplanar;
+          ` + shader.fragmentShader;
+
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <map_fragment>',
+            `
+            #ifdef USE_MAP
+              vec4 sampledDiffuseColor = vec4(1.0);
+              
+              if (uUseTriplanar > 0.5) {
+                  // Triplanar Mapping
+                  vec3 blend = abs(vWorldNormal);
+                  blend = normalize(max(blend, 0.00001)); // Avoid div by zero
+                  float b = blend.x + blend.y + blend.z;
+                  blend /= b;
+                  
+                  // Calculate UVs
+                  // uTextureSize contains (width, height, unused)
+                  // We map world units to texture units.
+                  // If textureWidth is 10, then 10 world units = 1 texture repeat.
+                  // So uv = pos / textureWidth.
+                  // We also apply uScale (scale modifier).
+                  
+                  // Effective size in world units
+                  float effW = max(0.01, uTextureSize.x);
+                  float effH = max(0.01, uTextureSize.y);
+                  
+                  // Adjust by scale slider (uScale)
+                  // If scale is 2.0, texture looks 2x bigger? Or repeats 2x more?
+                  // In the existing logic: repeat = (modelSize / texSize) * scale
+                  // So higher scale = more repeats = smaller texture features.
+                  // So uv = pos * (scale / texSize)
+                  
+                  float sx = uScale / effW;
+                  float sy = uScale / effH;
+                  
+                  vec2 uvX = vWorldPosition.yz * vec2(sx, sy);
+                  vec2 uvY = vWorldPosition.xz * vec2(sx, sy);
+                  vec2 uvZ = vWorldPosition.xy * vec2(sx, sy);
+                  
+                  vec4 cx = texture2D(map, uvX);
+                  vec4 cy = texture2D(map, uvY);
+                  vec4 cz = texture2D(map, uvZ);
+                  
+                  sampledDiffuseColor = cx * blend.x + cy * blend.y + cz * blend.z;
+              } else {
+                  // Standard UV Mapping
+                  sampledDiffuseColor = texture2D( map, vMapUv );
+              }
+              
+              diffuseColor *= sampledDiffuseColor;
+            #endif
+            `
+          );
+          
+          mat.userData.shader = shader;
+       };
+
        if (baseTexture) {
           // Clone the texture structure (shares the image data, lightweight)
           const texClone = baseTexture.clone();
@@ -238,7 +331,7 @@ export const SceneModel: React.FC<ModelProps> = ({
           mat.roughness = 1.0;
           mat.metalness = 0.0;
           mat.transparent = true;
-          mat.needsUpdate = true;
+          mat.needsUpdate = true; // Trigger recompile
        } else {
           mat.map = null;
           mat.color.set('#f0f0f0');
@@ -273,29 +366,37 @@ export const SceneModel: React.FC<ModelProps> = ({
       // --- B. Texture Transforms ---
       if (mat.map) {
         // Determine which transform to use
-        // If mesh has specific transform, use it. Else use global (transform prop)
         const t = (submeshTransforms && submeshTransforms[mesh.uuid]) ? submeshTransforms[mesh.uuid] : transform;
         
         const tex = mat.map;
         const texWidth = Math.max(0.1, t.textureWidth);
         const texHeight = Math.max(0.1, t.textureHeight);
 
-        // Calculate repeat based on model physical size vs texture physical size
-        // Note: UV mapping depends on how the mesh was unwrapped. 
-        // Assuming reasonably standard UVs (0-1), we try to project the physical size.
-        // However, individual meshes might be small parts. 
-        // Often tiling is relative to the UV scale. 
-        // If we want "Real World Scale", we usually need to know the physical size covered by UV 0-1.
-        // For this viewer, we treat the 'scale' slider as the primary driver, adjusted by aspect ratio.
+        // Update Uniforms if shader is compiled
+        if (mat.userData.shader) {
+            mat.userData.shader.uniforms.uUseTriplanar.value = useTriplanar ? 1.0 : 0.0;
+            mat.userData.shader.uniforms.uTextureSize.value.set(texWidth, texHeight, 1.0);
+            mat.userData.shader.uniforms.uScale.value = t.scale;
+        }
 
+        // Standard UV Logic (Fallback or if Triplanar disabled)
+        // Even if Triplanar is enabled, we update these so if user toggles back, it's correct.
+        // Also, standard UV logic is used for 'map' texture reference in standard shader.
+        
         let repeatX = 1;
         let repeatY = 1;
 
-        // Use the global bounding box size as a reference for "1 scale" to keep things consistent across meshes?
-        // Or use the mesh's own bounding box?
-        // Using global model size ensures pattern continuity if UVs are laid out together.
-        repeatX = (modelSize.x / texWidth) * t.scale;
-        repeatY = (modelSize.y / texHeight) * t.scale;
+        if (useSubmeshScale) {
+            // If using Standard UV Scale, we assume 1 UV unit = uvStandardSize (e.g. 20 inches)
+            // So if texture is 10 inches, it should repeat 2 times (20/10).
+            // We ignore the model size because the UVs are already scaled to physical units.
+            repeatX = (uvStandardSize / texWidth) * t.scale;
+            repeatY = (uvStandardSize / texHeight) * t.scale;
+        } else {
+            // Default: Fit texture to model bounds (or submesh bounds if we kept that logic, but let's stick to global for now)
+            repeatX = (modelSize.x / texWidth) * t.scale;
+            repeatY = (modelSize.y / texHeight) * t.scale;
+        }
 
         tex.repeat.set(repeatX, repeatY);
         tex.offset.set(t.offsetX, t.offsetY);
@@ -328,7 +429,7 @@ export const SceneModel: React.FC<ModelProps> = ({
         if (wireframeChild) wireframeChild.visible = false;
       }
     });
-  }, [showWireframe, fbx]);
+  }, [showWireframe, model]);
 
   const handlePointerDown = (e: any) => {
     // Stop propagation so we don't click "through" to other meshes easily if overlapping
@@ -344,6 +445,13 @@ export const SceneModel: React.FC<ModelProps> = ({
        if (onMeshSelect) {
          onMeshSelect(mesh.uuid, mesh.name || "Untitled Part");
        }
+       if (onAnchorCalculated) {
+         mesh.updateMatrixWorld(true);
+         const box = new Box3().setFromObject(mesh);
+         const size = new Vector3();
+         box.getSize(size);
+         onAnchorCalculated(size.y);
+       }
     }
   };
 
@@ -357,7 +465,7 @@ export const SceneModel: React.FC<ModelProps> = ({
       onPointerDown={handlePointerDown}
       onPointerMissed={handleMissed}
     >
-      <primitive object={fbx} dispose={null} />
+      <primitive object={model} dispose={null} />
       {showDimensions && boundingBox && <DimensionLabels box={boundingBox} unit={unit} />}
     </group>
   );

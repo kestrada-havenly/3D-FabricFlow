@@ -71,8 +71,9 @@ const PlaceholderMesh = ({ transform, textureUrl }: { transform: TextureTransfor
 };
 
 export default function App() {
-  const [fbxUrl, setFbxUrl] = useState<string | null>(null);
-  const [fbxName, setFbxName] = useState<string>('');
+  const [modelUrl, setModelUrl] = useState<string | null>(null);
+  const [modelName, setModelName] = useState<string>('');
+  const [modelType, setModelType] = useState<'fbx' | 'obj' | null>(null);
   
   // originalTextureUrl holds the raw uploaded file
   const [originalTextureUrl, setOriginalTextureUrl] = useState<string | null>(null);
@@ -87,6 +88,7 @@ export default function App() {
   const [submeshTransforms, setSubmeshTransforms] = useState<Record<string, TextureTransform>>({});
   const [selectedMeshId, setSelectedMeshId] = useState<string | null>(null);
   const [selectedMeshName, setSelectedMeshName] = useState<string | null>(null);
+  const [selectedMeshHeight, setSelectedMeshHeight] = useState<number | null>(null);
 
   const [adjustments, setAdjustments] = useState<TextureAdjustments>(INITIAL_ADJUSTMENTS);
   
@@ -96,6 +98,9 @@ export default function App() {
   const [showUVGrid, setShowUVGrid] = useState(false);
   const [unit, setUnit] = useState<Unit>('in');
   const [ambientIntensity, setAmbientIntensity] = useState(3.0);
+  const [useTriplanar, setUseTriplanar] = useState(true);
+  const [useSubmeshScale, setUseSubmeshScale] = useState(false);
+  const [uvStandardSize, setUvStandardSize] = useState(23); // Default 23 inches
   
   // UV Viewer State
   const [showUVViewer, setShowUVViewer] = useState(false);
@@ -129,6 +134,11 @@ export default function App() {
   const handleMeshSelect = (id: string | null, name: string | null) => {
     setSelectedMeshId(id);
     setSelectedMeshName(name);
+    
+    if (!id) {
+      setSelectedMeshHeight(null);
+    }
+
     // If selecting a new mesh that doesn't have a transform yet, 
     // we could initialize it with the current global transform, or leave it undefined 
     // to fallback to global in the render logic. 
@@ -141,11 +151,20 @@ export default function App() {
     }
   };
 
-  const handleFbxUpload = (file: File) => {
-    if (fbxUrl) URL.revokeObjectURL(fbxUrl);
+  const handleModelUpload = (file: File) => {
+    if (modelUrl) URL.revokeObjectURL(modelUrl);
     const url = URL.createObjectURL(file);
-    setFbxUrl(url);
-    setFbxName(file.name);
+    setModelUrl(url);
+    setModelName(file.name);
+    
+    // Determine type
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext === 'obj') {
+      setModelType('obj');
+    } else {
+      setModelType('fbx');
+    }
+
     // Reset Data
     setUvData([]);
     setSubmeshTransforms({});
@@ -286,12 +305,13 @@ export default function App() {
   };
 
   const handleClearScene = () => {
-    if (fbxUrl) URL.revokeObjectURL(fbxUrl);
+    if (modelUrl) URL.revokeObjectURL(modelUrl);
     if (originalTextureUrl) URL.revokeObjectURL(originalTextureUrl);
     if (textureUrl) URL.revokeObjectURL(textureUrl);
     
-    setFbxUrl(null);
-    setFbxName('');
+    setModelUrl(null);
+    setModelName('');
+    setModelType(null);
     setOriginalTextureUrl(null);
     setTextureUrl(null);
     setTextureName('');
@@ -327,19 +347,24 @@ export default function App() {
               <directionalLight position={[-5, 5, -5]} intensity={0.2} />
 
               <Center>
-                {fbxUrl ? (
+                {modelUrl ? (
                   <SceneModel 
-                    fbxUrl={fbxUrl} 
+                    modelUrl={modelUrl} 
+                    modelType={modelType}
                     textureUrl={textureUrl}
                     transform={globalTransform}
                     submeshTransforms={submeshTransforms}
                     selectedMeshId={selectedMeshId}
                     onMeshSelect={handleMeshSelect}
+                    onAnchorCalculated={setSelectedMeshHeight}
                     showDimensions={showDimensions}
                     showWireframe={showWireframe}
                     showUVGrid={showUVGrid}
                     unit={unit}
                     onUVsLoaded={handleUVsLoaded}
+                    useTriplanar={useTriplanar}
+                    useSubmeshScale={useSubmeshScale}
+                    uvStandardSize={uvStandardSize}
                   />
                 ) : (
                   <PlaceholderMesh transform={globalTransform} textureUrl={textureUrl} />
@@ -368,7 +393,7 @@ export default function App() {
           />
         </Canvas>
 
-        {!fbxUrl && (
+        {!modelUrl && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-xl border border-white flex flex-col items-center text-center max-w-md mx-4">
               <div className="bg-indigo-100 p-4 rounded-full mb-4">
@@ -376,7 +401,7 @@ export default function App() {
               </div>
               <h2 className="text-xl font-bold text-gray-800 mb-2">Ready to Visualize</h2>
               <p className="text-gray-600 leading-relaxed">
-                Upload your <strong>.FBX furniture model</strong> and a <strong>fabric texture</strong> using the panel on the left to get started.
+                Upload your <strong>.FBX or .OBJ furniture model</strong> and a <strong>fabric texture</strong> using the panel on the left to get started.
               </p>
             </div>
           </div>
@@ -386,7 +411,7 @@ export default function App() {
       <ControlPanel 
         transform={activeTransform}
         onTransformChange={handleTransformChange}
-        onFbxUpload={handleFbxUpload}
+        onModelUpload={handleModelUpload}
         onTextureUpload={handleTextureUpload}
         onResetCamera={handleResetCamera}
         onClearScene={handleClearScene}
@@ -398,7 +423,7 @@ export default function App() {
         onToggleUVGrid={() => setShowUVGrid(!showUVGrid)}
         showUVViewer={showUVViewer}
         onToggleUVViewer={() => setShowUVViewer(!showUVViewer)}
-        fbxName={fbxName}
+        modelName={modelName}
         textureName={textureName}
         unit={unit}
         setUnit={setUnit}
@@ -409,6 +434,13 @@ export default function App() {
         onAmbientIntensityChange={setAmbientIntensity}
         selectedMeshName={selectedMeshName}
         onDeselectMesh={() => handleMeshSelect(null, null)}
+        useTriplanar={useTriplanar}
+        onToggleTriplanar={() => setUseTriplanar(!useTriplanar)}
+        useSubmeshScale={useSubmeshScale}
+        setUseSubmeshScale={setUseSubmeshScale}
+        uvStandardSize={uvStandardSize}
+        onUvStandardSizeChange={setUvStandardSize}
+        selectedMeshHeight={selectedMeshHeight}
       />
 
       <TexturePreview 
@@ -421,7 +453,7 @@ export default function App() {
       />
       
       <GeminiAdvisor 
-        hasModel={!!fbxUrl} 
+        hasModel={!!modelUrl} 
         hasTexture={!!textureUrl}
         textureName={textureName}
         onMouseEnter={() => setOrbitEnabled(false)}

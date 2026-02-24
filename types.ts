@@ -25,23 +25,32 @@ export interface UVMeshData {
 }
 
 export interface AppState {
-  fbxUrl: string | null;
+  modelUrl: string | null;
+  modelType: 'fbx' | 'obj' | null;
   textureUrl: string | null;
   transform: TextureTransform;
+  useTriplanar: boolean;
+  useSubmeshScale: boolean;
+  uvStandardSize: number;
 }
 
 export interface ModelProps {
-  fbxUrl: string | null;
+  modelUrl: string | null;
+  modelType: 'fbx' | 'obj' | null;
   textureUrl: string | null;
   transform: TextureTransform; // Global/Default transform
   submeshTransforms: Record<string, TextureTransform>; // Per-mesh transforms
   selectedMeshId: string | null;
   onMeshSelect: (id: string | null, name: string | null) => void;
+  onAnchorCalculated?: (height: number) => void;
   showDimensions?: boolean;
   showWireframe?: boolean;
   showUVGrid?: boolean;
   unit: Unit;
   onUVsLoaded?: (data: UVMeshData[]) => void;
+  useTriplanar: boolean;
+  useSubmeshScale: boolean;
+  uvStandardSize: number;
 }
 
 // Augment the JSX namespace to include Three.js elements used in R3F
